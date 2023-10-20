@@ -1,0 +1,152 @@
+package za.co.codehub.idgenerator;
+
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.boot.SpringApplication;
+import org.springframework.boot.autoconfigure.SpringBootApplication;
+
+import java.io.FileWriter;
+import java.io.IOException;
+import java.time.LocalDate;
+import java.time.format.DateTimeFormatter;
+import java.util.ArrayList;
+
+@SpringBootApplication
+public class IdGeneratorApplication {
+
+	private static ArrayList<String> listOfDOBs;
+	private static ArrayList<String> listOfMaleSSSS;
+	private static ArrayList<String> listOfFemaleSSSS;
+	private static final String RSA_CITIZEN = "0";
+	private static final String OUTPUT_FILE_PATH = "ids.csv";
+
+	private static Logger logger = LoggerFactory.getLogger(IdGeneratorApplication.class);
+
+	public static void main(String[] args) {
+		SpringApplication.run(IdGeneratorApplication.class, args);
+
+		logger.info("Start generating IDs");
+		generateRsaIds();
+	}
+
+	private static void generateRsaIds() {
+		listOfDOBs = getDatesOfBirth("1970-01-01", "1970-12-31");
+		logger.info("DOBs size: " + listOfDOBs.size());
+		generateGenderDigits("F");
+		logger.info("Female SSSS size: " + listOfFemaleSSSS.size());
+		generateGenderDigits("M");
+		logger.info("Male SSSS size: " + listOfMaleSSSS.size());
+
+		ArrayList<String> listOfIds = new ArrayList<>();
+
+		for (String dob : listOfDOBs) {
+			listOfIds.addAll(generateIdsForDOB(dob, listOfFemaleSSSS));
+			listOfIds.addAll(generateIdsForDOB(dob, listOfMaleSSSS));
+		}
+
+		logger.info("Total IDs: " + listOfIds.size());
+
+		writeIdsToFile(listOfIds);
+	}
+
+	private static void writeIdsToFile(ArrayList<String> listOfIds) {
+		try (FileWriter writer = new FileWriter(OUTPUT_FILE_PATH)) {
+			for (String id : listOfIds) {
+				writer.write(id);
+				writer.write("\n");
+			}
+			logger.info("IDs written to file: " + OUTPUT_FILE_PATH);
+		} catch (IOException e) {
+			logger.error("Failed to write IDs to file: " + OUTPUT_FILE_PATH);
+			e.printStackTrace();
+		}
+	}
+
+	private static ArrayList<String> generateIdsForDOB(String dob, ArrayList<String> listOfSSSS) {
+		StringBuilder idStringBuilder = new StringBuilder();
+		ArrayList<String> dobIds = new ArrayList<>();
+
+		for (String digits : listOfSSSS) {
+			idStringBuilder.append(dob);
+			idStringBuilder.append(digits);
+			idStringBuilder.append(RSA_CITIZEN);
+			idStringBuilder.append("8");
+			idStringBuilder.append(generateChecksumDigit(idStringBuilder.toString()));
+			dobIds.add(idStringBuilder.toString());
+			logger.info("generated ID: " + idStringBuilder);
+			idStringBuilder.setLength(0);
+		}
+
+		return dobIds;
+	}
+
+	private static String generateChecksumDigit(String number) {
+		String reversedNumber = new StringBuilder(number).reverse().toString();
+
+		int sum = 0;
+		boolean doubleDigit = false;
+
+		for (int i = 0; i < reversedNumber.length(); i++) {
+			int digit = Character.getNumericValue(reversedNumber.charAt(i));
+
+			if (doubleDigit) {
+				digit *= 2;
+
+				if (digit > 9) {
+					digit = digit % 10 + 1;
+				}
+			}
+
+			sum += digit;
+			doubleDigit = !doubleDigit;
+		}
+
+		String checksumDigit = String.valueOf((10 - (sum % 10)) % 10);
+
+		return checksumDigit;
+	}
+
+	public static ArrayList<String> getDatesOfBirth(String startDateStr, String endDateStr) {
+		LocalDate startDate = LocalDate.parse(startDateStr);
+		LocalDate endDate = LocalDate.parse(endDateStr);
+
+		DateTimeFormatter formatter = DateTimeFormatter.ofPattern("yyMMdd");
+
+		ArrayList<String> datesOfBirth = new ArrayList<>();
+		LocalDate currentDate = startDate;
+		while (!currentDate.isAfter(endDate)) {
+			datesOfBirth.add(currentDate.format(formatter));
+			currentDate = currentDate.plusDays(1);
+		}
+
+		return datesOfBirth;
+	}
+
+	private static void generateGenderDigits(String gender) {
+		if (gender.equals("F")) {
+			listOfFemaleSSSS = generateFemaleSSSS();
+		} else if (gender.equals("M")) {
+			listOfMaleSSSS = generateMaleSSSS();
+		}
+	}
+
+	private static ArrayList<String> generateFemaleSSSS() {
+		ArrayList<String> listOfDigits = new ArrayList<>();
+
+		for (int count = 0; count < 5000; count++) {
+			listOfDigits.add(String.format("%04d", count));
+		}
+
+		return listOfDigits;
+	}
+
+	private static ArrayList<String> generateMaleSSSS() {
+		ArrayList<String> listOfDigits = new ArrayList<>();
+
+		for (int count = 5000; count < 10000; count++) {
+			listOfDigits.add(String.valueOf(count));
+		}
+
+		return listOfDigits;
+	}
+}
